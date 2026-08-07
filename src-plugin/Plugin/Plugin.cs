@@ -81,7 +81,10 @@
             {
                 HasDatabase = false;
 
-                base.Logger.LogError("Failed to initialize SQLite preferences database: {0}", ex.Message);
+                // ex.Message alone is too shallow here (Task.Run(...).Wait() wraps faults in an
+                // AggregateException, and Microsoft.Data.Sqlite's own init failures nest further under
+                // a TypeInitializationException) — log the full chain so the real root cause is visible.
+                base.Logger.LogError("Failed to initialize SQLite preferences database: {0}", ex.ToString());
             }
 
             Menu = new Menu.KitsuneMenu(this);
