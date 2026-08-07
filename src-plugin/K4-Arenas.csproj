@@ -4,9 +4,9 @@
     <DebugType>None</DebugType>
     <!--
       Needs to stay enabled now that the plugin ships a native dependency (Microsoft.Data.Sqlite).
-      With GenerateDependencyFile=false, `dotnet publish -r <rid> --self-contained false` silently
-      stops copying runtimes/<rid>/native/* into the publish output entirely, which is what left
-      SqliteConnection unable to find libe_sqlite3.so at runtime.
+      With GenerateDependencyFile=false, a framework-dependent RID-specific `dotnet publish -r <rid>`
+      silently stops copying runtimes/<rid>/native/* into the publish output entirely, which is what
+      left SqliteConnection unable to find libe_sqlite3.so at runtime.
     -->
     <GenerateDependencyFile>true</GenerateDependencyFile>
     <PublishDir>./bin/K4-Arenas/plugins/K4-Arenas/</PublishDir>
