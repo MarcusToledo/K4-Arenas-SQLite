@@ -6,7 +6,7 @@
     <PublishDir>./bin/K4-Arenas-Bots/plugins/K4-Arenas-Bots/</PublishDir>
   </PropertyGroup>
   <PropertyGroup>
-    <TargetFramework>net8.0</TargetFramework>
+    <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
   </PropertyGroup>

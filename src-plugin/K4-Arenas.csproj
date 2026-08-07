@@ -6,7 +6,7 @@
     <PublishDir>./bin/K4-Arenas/plugins/K4-Arenas/</PublishDir>
   </PropertyGroup>
   <PropertyGroup>
-    <TargetFramework>net8.0</TargetFramework>
+    <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <!-- Needed so `dotnet publish` copies the native SQLite libraries (runtimes/<rid>/native) required by Microsoft.Data.Sqlite. -->
@@ -20,6 +20,10 @@
     </PackageReference>
     <PackageReference Include="Dapper" Version="*" />
     <PackageReference Include="Microsoft.Data.Sqlite" Version="*" />
+    <!-- Microsoft.Data.Sqlite still pulls SQLitePCLRaw.bundle_e_sqlite3 2.1.11, which bundles a SQLite
+         build affected by GHSA-2m69-gcr7-jv3q (memory corruption, fixed in SQLite 3.50.2+). Pin the
+         transitive dependency up to force the patched native library. -->
+    <PackageReference Include="SQLitePCLRaw.bundle_e_sqlite3" Version="2.1.12" />
     <ProjectReference Include="../src-shared/K4-ArenaSharedApi.csproj">
       <Private>false</Private>
     </ProjectReference>
