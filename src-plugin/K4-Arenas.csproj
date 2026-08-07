@@ -2,7 +2,13 @@
   <PropertyGroup Condition="'$(Configuration)'=='Release'">
     <DebugSymbols>False</DebugSymbols>
     <DebugType>None</DebugType>
-    <GenerateDependencyFile>false</GenerateDependencyFile>
+    <!--
+      Needs to stay enabled now that the plugin ships a native dependency (Microsoft.Data.Sqlite).
+      With GenerateDependencyFile=false, `dotnet publish -r <rid> --self-contained false` silently
+      stops copying runtimes/<rid>/native/* into the publish output entirely, which is what left
+      SqliteConnection unable to find libe_sqlite3.so at runtime.
+    -->
+    <GenerateDependencyFile>true</GenerateDependencyFile>
     <PublishDir>./bin/K4-Arenas/plugins/K4-Arenas/</PublishDir>
   </PropertyGroup>
   <PropertyGroup>
@@ -39,10 +45,10 @@
     <Copy SourceFiles="$(ProjectDir)/../src-shared/K4-ArenaSharedApi.dll" DestinationFolder="$(PublishDir)../../shared/K4-ArenaSharedApi/" />
     <Copy SourceFiles="$(ProjectDir)libs\KitsuneMenu.dll" DestinationFolder="$(PublishDir)../../shared/KitsuneMenu/" OverwriteReadOnlyFiles="true" SkipUnchangedFiles="false" />
     <!--
-      CounterStrikeSharp loads plugin DLLs directly from the plugin folder, not through a normal
-      `dotnet exec` host, so it does not probe the `runtimes/<rid>/native` subfolder that a portable
-      publish produces. Flatten the native SQLite library next to the plugin DLL so Microsoft.Data.Sqlite
-      can find it at runtime. If this file is missing after publish, copy it manually next to K4-Arenas.dll.
+      Redundant safety net: with GenerateDependencyFile enabled above, the SDK already copies
+      runtimes/<rid>/native/* into the publish output and CounterStrikeSharp's loader resolves it
+      from there via K4-Arenas.deps.json (confirmed working elsewhere with the same pattern). Also
+      drop a flattened copy next to the DLL in case that resolution ever falls back to it.
     -->
     <Copy SourceFiles="$(PublishDir)runtimes/linux-x64/native/libe_sqlite3.so" DestinationFolder="$(PublishDir)\" Condition="Exists('$(PublishDir)runtimes/linux-x64/native/libe_sqlite3.so')" />
     <Copy SourceFiles="$(PublishDir)runtimes/win-x64/native/e_sqlite3.dll" DestinationFolder="$(PublishDir)\" Condition="Exists('$(PublishDir)runtimes/win-x64/native/e_sqlite3.dll')" />
