@@ -23,8 +23,9 @@
     <ProjectReference Include="../src-shared/K4-ArenaSharedApi.csproj">
       <Private>false</Private>
     </ProjectReference>
+    <!-- Place your local copy of KitsuneMenu.dll under src-plugin/libs/ (see libs/README.md). -->
     <Reference Include="KitsuneMenu">
-      <HintPath>/Users/sples/Projects/CS2_Random/Menu-main/src/bin/KitsuneMenu/shared/KitsuneMenu/KitsuneMenu.dll</HintPath>
+      <HintPath>libs\KitsuneMenu.dll</HintPath>
       <Private>false</Private>
     </Reference>
     <None Update="lang\**\*.*" CopyToOutputDirectory="PreserveNewest" />
@@ -32,7 +33,7 @@
   <Target Name="CopyCustomFilesToPublishDirectory" AfterTargets="Publish">
     <Copy SourceFiles="$(ProjectDir)readme.txt" DestinationFolder="$(PublishDir)\" />
     <Copy SourceFiles="$(ProjectDir)/../src-shared/K4-ArenaSharedApi.dll" DestinationFolder="$(PublishDir)../../shared/K4-ArenaSharedApi/" />
-    <Copy SourceFiles="/Users/sples/Projects/CS2_Random/Menu-main/src/bin/KitsuneMenu/shared/KitsuneMenu/KitsuneMenu.dll" DestinationFolder="$(PublishDir)../../shared/KitsuneMenu/" OverwriteReadOnlyFiles="true" SkipUnchangedFiles="false" />
+    <Copy SourceFiles="$(ProjectDir)libs\KitsuneMenu.dll" DestinationFolder="$(PublishDir)../../shared/KitsuneMenu/" OverwriteReadOnlyFiles="true" SkipUnchangedFiles="false" />
     <!--
       CounterStrikeSharp loads plugin DLLs directly from the plugin folder, not through a normal
       `dotnet exec` host, so it does not probe the `runtimes/<rid>/native` subfolder that a portable
