@@ -123,7 +123,7 @@
                     if (Arenas is null) return;
 
                     var validPlayers = Utilities.GetPlayers()
-                        .Where(p => p?.IsValid == true && p.PlayerPawn?.IsValid == true && !p.IsBot && !p.IsHLTV && p.Connected == PlayerConnectedState.PlayerConnected);
+                        .Where(p => p?.IsValid == true && p.PlayerPawn?.IsValid == true && !p.IsBot && !p.IsHLTV && p.Connected == PlayerConnectedState.Connected);
 
                     foreach (CCSPlayerController player in validPlayers)
                     {

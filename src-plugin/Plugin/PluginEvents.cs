@@ -27,7 +27,7 @@ namespace K4Arenas
 
 					gameRules = Utilities.FindAllEntitiesByDesignerName<CCSGameRulesProxy>("cs_gamerules").First().GameRules;
 
-					foreach (CCSPlayerController player in Utilities.GetPlayers().Where(x => x?.IsValid == true && !x.IsHLTV && x.Connected == PlayerConnectedState.PlayerConnected && !x.IsBot))
+					foreach (CCSPlayerController player in Utilities.GetPlayers().Where(x => x?.IsValid == true && !x.IsHLTV && x.Connected == PlayerConnectedState.Connected && !x.IsBot))
 					{
 						if (Arenas.FindPlayer(player) == null)
 							SetupPlayer(player);
@@ -41,7 +41,7 @@ namespace K4Arenas
 							{
 								if (lastRealPlayers == 0)
 								{
-									lastRealPlayers = Utilities.GetPlayers().Count(x => x?.IsValid == true && !x.IsHLTV && x.Connected == PlayerConnectedState.PlayerConnected && !x.IsBot);
+									lastRealPlayers = Utilities.GetPlayers().Count(x => x?.IsValid == true && !x.IsHLTV && x.Connected == PlayerConnectedState.Connected && !x.IsBot);
 									return;
 								}
 

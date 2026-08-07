@@ -31,7 +31,7 @@ namespace K4Arenas
 			if (gameRules.WarmupPeriod == true || Arenas == null)
 				return;
 
-			List<CCSPlayerController> players = [.. Utilities.GetPlayers().Where(x => x?.IsValid == true && x.PlayerPawn?.IsValid == true && x.Team > CsTeam.Spectator && !x.IsHLTV && x.Connected == PlayerConnectedState.PlayerConnected)];
+			List<CCSPlayerController> players = [.. Utilities.GetPlayers().Where(x => x?.IsValid == true && x.PlayerPawn?.IsValid == true && x.Team > CsTeam.Spectator && !x.IsHLTV && x.Connected == PlayerConnectedState.Connected)];
 
 			if (!players.Any(p => !p.IsBot))
 				return;
