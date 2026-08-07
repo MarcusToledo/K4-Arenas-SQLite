@@ -9,6 +9,8 @@
     <TargetFramework>net8.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
+    <!-- Needed so `dotnet publish` copies the native SQLite libraries (runtimes/<rid>/native) required by Microsoft.Data.Sqlite. -->
+    <RuntimeIdentifiers>linux-x64;win-x64</RuntimeIdentifiers>
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="CounterStrikeSharp.API" Version="*">
@@ -17,7 +19,7 @@
       <IncludeAssets>compile; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
     </PackageReference>
     <PackageReference Include="Dapper" Version="*" />
-    <PackageReference Include="MySqlConnector" Version="*" />
+    <PackageReference Include="Microsoft.Data.Sqlite" Version="*" />
     <ProjectReference Include="../src-shared/K4-ArenaSharedApi.csproj">
       <Private>false</Private>
     </ProjectReference>
@@ -31,5 +33,13 @@
     <Copy SourceFiles="$(ProjectDir)readme.txt" DestinationFolder="$(PublishDir)\" />
     <Copy SourceFiles="$(ProjectDir)/../src-shared/K4-ArenaSharedApi.dll" DestinationFolder="$(PublishDir)../../shared/K4-ArenaSharedApi/" />
     <Copy SourceFiles="/Users/sples/Projects/CS2_Random/Menu-main/src/bin/KitsuneMenu/shared/KitsuneMenu/KitsuneMenu.dll" DestinationFolder="$(PublishDir)../../shared/KitsuneMenu/" OverwriteReadOnlyFiles="true" SkipUnchangedFiles="false" />
+    <!--
+      CounterStrikeSharp loads plugin DLLs directly from the plugin folder, not through a normal
+      `dotnet exec` host, so it does not probe the `runtimes/<rid>/native` subfolder that a portable
+      publish produces. Flatten the native SQLite library next to the plugin DLL so Microsoft.Data.Sqlite
+      can find it at runtime. If this file is missing after publish, copy it manually next to K4-Arenas.dll.
+    -->
+    <Copy SourceFiles="$(PublishDir)runtimes/linux-x64/native/libe_sqlite3.so" DestinationFolder="$(PublishDir)\" Condition="Exists('$(PublishDir)runtimes/linux-x64/native/libe_sqlite3.so')" />
+    <Copy SourceFiles="$(PublishDir)runtimes/win-x64/native/e_sqlite3.dll" DestinationFolder="$(PublishDir)\" Condition="Exists('$(PublishDir)runtimes/win-x64/native/e_sqlite3.dll')" />
   </Target>
 </Project>

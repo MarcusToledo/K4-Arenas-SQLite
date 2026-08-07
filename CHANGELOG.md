@@ -1,3 +1,9 @@
+-- 2026.08.07 - 2.1.0
+
+- feat: Migrated preferences storage from MySQL to SQLite (Microsoft.Data.Sqlite). No more external database server required.
+- breaking: `database-settings` config now only has `database-file`, `table-prefix` and `table-purge-days`. Old MySQL fields (host/username/password/database/port/sslmode) are removed.
+- fix: Preferences save no longer rethrows into an unobserved Task exception on failure; it logs and returns instead.
+
 -- 2025.08.05 - 2.0.8
 
 - feat: Added API function to get weapon preferences for a player for a given weapon type (#50)

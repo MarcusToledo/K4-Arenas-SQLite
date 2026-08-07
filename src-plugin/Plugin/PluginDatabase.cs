@@ -1,9 +1,9 @@
 
-using System.Data;
+using System.Threading;
 using CounterStrikeSharp.API.Core;
 using K4Arenas.Models;
 using K4ArenaSharedApi;
-using MySqlConnector;
+using Microsoft.Data.Sqlite;
 using Dapper;
 using CounterStrikeSharp.API.Modules.Entities.Constants;
 using Microsoft.Extensions.Logging;
@@ -12,42 +12,72 @@ namespace K4Arenas;
 
 public sealed partial class Plugin : BasePlugin
 {
-	public static MySqlConnection CreateConnection(PluginConfig config)
+	// Serializes writes across every caller (LoadPlayerAsync, SavePlayerPreferencesAsync, PurgeDatabaseAsync, ...).
+	// SQLite allows only one writer at a time; concurrent Task.Run() writes from multiple menus would otherwise
+	// race for the file lock and surface as "database is locked" errors.
+	private readonly SemaphoreSlim _databaseWriteLock = new(1, 1);
+
+	private sealed class PlayerPreferencesRow
 	{
-		DatabaseSettings _settings = config.DatabaseSettings;
+		public int? Rifle { get; set; }
+		public int? Sniper { get; set; }
+		public int? Shotgun { get; set; }
+		public int? Smg { get; set; }
+		public int? Lmg { get; set; }
+		public int? Pistol { get; set; }
+		public string Rounds { get; set; } = "";
+	}
 
-		MySqlConnectionStringBuilder builder = new MySqlConnectionStringBuilder
-		{
-			Server = _settings.Host,
-			UserID = _settings.Username,
-			Password = _settings.Password,
-			Database = _settings.Database,
-			Port = (uint)_settings.Port,
-			SslMode = Enum.TryParse(_settings.Sslmode, true, out MySqlSslMode sslMode) ? sslMode : MySqlSslMode.Preferred,
-		};
+	public async Task<SqliteConnection> OpenConnectionAsync()
+	{
+		SqliteConnection connection = new($"Data Source={DatabaseFilePath}");
+		await connection.OpenAsync();
+		await ApplyPragmasAsync(connection);
 
-		return new MySqlConnection(builder.ToString());
+		return connection;
+	}
+
+	private static async Task ApplyPragmasAsync(SqliteConnection connection)
+	{
+		using SqliteCommand command = connection.CreateCommand();
+
+		command.CommandText = "PRAGMA journal_mode='WAL';";
+		await command.ExecuteNonQueryAsync();
+
+		command.CommandText = "PRAGMA synchronous='NORMAL';";
+		await command.ExecuteNonQueryAsync();
+
+		command.CommandText = "PRAGMA busy_timeout=5000;";
+		await command.ExecuteNonQueryAsync();
 	}
 
 	public async Task CreateTableAsync()
 	{
 		string tablePrefix = Config.DatabaseSettings.TablePrefix;
-		string tableQuery = @$"CREATE TABLE IF NOT EXISTS `{tablePrefix}k4-arenas` (
-			`steamid64` BIGINT UNIQUE,
-			`rifle` INT,
-			`sniper` INT,
-			`shotgun` INT,
-			`smg` INT,
-			`lmg` INT,
-			`pistol` INT,
-			`rounds` VARCHAR(256) NOT NULL,
-			`lastseen` TIMESTAMP NOT NULL
-		);";
+		string tableQuery = $@"
+			CREATE TABLE IF NOT EXISTS ""{tablePrefix}k4-arenas"" (
+				""steamid64"" TEXT PRIMARY KEY,
+				""rifle"" INTEGER,
+				""sniper"" INTEGER,
+				""shotgun"" INTEGER,
+				""smg"" INTEGER,
+				""lmg"" INTEGER,
+				""pistol"" INTEGER,
+				""rounds"" TEXT NOT NULL,
+				""lastseen"" TEXT NOT NULL
+			);";
 
-		using MySqlConnection connection = CreateConnection(Config);
-		await connection.OpenAsync();
+		using SqliteConnection connection = await OpenConnectionAsync();
 
-		await connection.ExecuteAsync(tableQuery);
+		await _databaseWriteLock.WaitAsync();
+		try
+		{
+			await connection.ExecuteAsync(tableQuery);
+		}
+		finally
+		{
+			_databaseWriteLock.Release();
+		}
 	}
 
 	public async Task LoadPlayerAsync(ulong SteamID)
@@ -55,35 +85,43 @@ public sealed partial class Plugin : BasePlugin
 		try
 		{
 			string tablePrefix = Config.DatabaseSettings.TablePrefix;
-
 			DefaultWeaponSettings dws = Config.DefaultWeaponSettings;
+			string steamId = SteamID.ToString();
 
 			string sqlInsertOrUpdate = $@"
-				INSERT INTO `{tablePrefix}k4-arenas` (`steamid64`, `lastseen`, `rifle`, `sniper`, `shotgun`, `smg`, `lmg`, `pistol`, `rounds`)
+				INSERT INTO ""{tablePrefix}k4-arenas"" (""steamid64"", ""lastseen"", ""rifle"", ""sniper"", ""shotgun"", ""smg"", ""lmg"", ""pistol"", ""rounds"")
 				VALUES (@SteamID, CURRENT_TIMESTAMP, @DefaultRifle, @DefaultSniper, @DefaultShotgun, @DefaultSMG, @DefaultLMG, @DefaultPistol, @Rounds)
-				ON DUPLICATE KEY UPDATE `lastseen` = CURRENT_TIMESTAMP;";
+				ON CONFLICT(""steamid64"") DO UPDATE SET ""lastseen"" = CURRENT_TIMESTAMP;";
 
 			string sqlSelect = $@"
-				SELECT `rifle`, `sniper`, `shotgun`, `smg`, `lmg`, `pistol`, `rounds`
-				FROM `{tablePrefix}k4-arenas` WHERE `steamid64` = @SteamID;";
-
-			using MySqlConnection connection = CreateConnection(Config);
-			await connection.OpenAsync();
+				SELECT ""rifle"", ""sniper"", ""shotgun"", ""smg"", ""lmg"", ""pistol"", ""rounds""
+				FROM ""{tablePrefix}k4-arenas"" WHERE ""steamid64"" = @SteamID;";
 
 			string rounds = string.Join(",", RoundType.RoundTypes.Where(r => r.EnabledByDefault).Select(x => x.ID.ToString()));
-			await connection.ExecuteAsync(sqlInsertOrUpdate, new
-			{
-				SteamID,
-				Rounds = rounds,
-				DefaultRifle = FindEnumValueByEnumMemberValue(dws.DefaultRifle),
-				DefaultSniper = FindEnumValueByEnumMemberValue(dws.DefaultSniper),
-				DefaultShotgun = FindEnumValueByEnumMemberValue(dws.DefaultShotgun),
-				DefaultSMG = FindEnumValueByEnumMemberValue(dws.DefaultSMG),
-				DefaultLMG = FindEnumValueByEnumMemberValue(dws.DefaultLMG),
-				DefaultPistol = FindEnumValueByEnumMemberValue(dws.DefaultPistol)
-			});
 
-			dynamic? result = await connection.QuerySingleOrDefaultAsync<dynamic>(sqlSelect, new { SteamID });
+			using SqliteConnection connection = await OpenConnectionAsync();
+
+			await _databaseWriteLock.WaitAsync();
+			try
+			{
+				await connection.ExecuteAsync(sqlInsertOrUpdate, new
+				{
+					SteamID = steamId,
+					Rounds = rounds,
+					DefaultRifle = FindEnumValueByEnumMemberValue(dws.DefaultRifle),
+					DefaultSniper = FindEnumValueByEnumMemberValue(dws.DefaultSniper),
+					DefaultShotgun = FindEnumValueByEnumMemberValue(dws.DefaultShotgun),
+					DefaultSMG = FindEnumValueByEnumMemberValue(dws.DefaultSMG),
+					DefaultLMG = FindEnumValueByEnumMemberValue(dws.DefaultLMG),
+					DefaultPistol = FindEnumValueByEnumMemberValue(dws.DefaultPistol)
+				});
+			}
+			finally
+			{
+				_databaseWriteLock.Release();
+			}
+
+			PlayerPreferencesRow? result = await connection.QuerySingleOrDefaultAsync<PlayerPreferencesRow>(sqlSelect, new { SteamID = steamId });
 			if (result != null)
 			{
 				ArenaPlayer? arenaPlayer = Arenas?.FindPlayer(SteamID);
@@ -93,18 +131,18 @@ public sealed partial class Plugin : BasePlugin
 
 				arenaPlayer.WeaponPreferences = new Dictionary<WeaponType, CsItem?>
 				{
-					{ WeaponType.Rifle, (CsItem?)result.rifle },
-					{ WeaponType.Sniper, (CsItem?)result.sniper },
-					{ WeaponType.Shotgun, (CsItem?)result.shotgun },
-					{ WeaponType.SMG, (CsItem?)result.smg },
-					{ WeaponType.LMG, (CsItem?)result.lmg },
-					{ WeaponType.Pistol, (CsItem?)result.pistol }
+					{ WeaponType.Rifle, (CsItem?)result.Rifle },
+					{ WeaponType.Sniper, (CsItem?)result.Sniper },
+					{ WeaponType.Shotgun, (CsItem?)result.Shotgun },
+					{ WeaponType.SMG, (CsItem?)result.Smg },
+					{ WeaponType.LMG, (CsItem?)result.Lmg },
+					{ WeaponType.Pistol, (CsItem?)result.Pistol }
 				};
 
-				if (!string.IsNullOrEmpty(result.rounds))
+				if (!string.IsNullOrEmpty(result.Rounds))
 				{
 					List<int> validRoundIds = [];
-					string[] roundIds = result.rounds.Split(',');
+					string[] roundIds = result.Rounds.Split(',');
 					List<RoundType> roundPreferences = [];
 
 					foreach (string roundId in roundIds)
@@ -124,11 +162,19 @@ public sealed partial class Plugin : BasePlugin
 					{
 						string validRounds = string.Join(",", validRoundIds);
 						string sqlUpdateRounds = $@"
-							UPDATE `{tablePrefix}k4-arenas`
-							SET `rounds` = @ValidRounds
-							WHERE `steamid64` = @SteamID;";
+							UPDATE ""{tablePrefix}k4-arenas""
+							SET ""rounds"" = @ValidRounds
+							WHERE ""steamid64"" = @SteamID;";
 
-						await connection.ExecuteAsync(sqlUpdateRounds, new { SteamID, ValidRounds = validRounds });
+						await _databaseWriteLock.WaitAsync();
+						try
+						{
+							await connection.ExecuteAsync(sqlUpdateRounds, new { SteamID = steamId, ValidRounds = validRounds });
+						}
+						finally
+						{
+							_databaseWriteLock.Release();
+						}
 					}
 
 					arenaPlayer.RoundPreferences = roundPreferences;
@@ -143,26 +189,72 @@ public sealed partial class Plugin : BasePlugin
 		}
 	}
 
+	public async Task SavePlayerPreferencesAsync(ArenaPlayer arenaPlayer)
+	{
+		if (!arenaPlayer.Loaded)
+			return;
+
+		try
+		{
+			string tablePrefix = Config.DatabaseSettings.TablePrefix;
+
+			string sqlUpdate = $@"
+				UPDATE ""{tablePrefix}k4-arenas""
+				SET ""rifle"" = @Rifle, ""sniper"" = @Sniper, ""shotgun"" = @Shotgun, ""smg"" = @SMG, ""lmg"" = @LMG, ""pistol"" = @Pistol, ""rounds"" = @Rounds, ""lastseen"" = CURRENT_TIMESTAMP
+				WHERE ""steamid64"" = @SteamID;";
+
+			var weaponParameters = new
+			{
+				SteamID = arenaPlayer.SteamID.ToString(),
+				Rifle = arenaPlayer.WeaponPreferences.TryGetValue(WeaponType.Rifle, out CsItem? rifle) ? rifle : null,
+				Sniper = arenaPlayer.WeaponPreferences.TryGetValue(WeaponType.Sniper, out CsItem? sniper) ? sniper : null,
+				Shotgun = arenaPlayer.WeaponPreferences.TryGetValue(WeaponType.Shotgun, out CsItem? shotgun) ? shotgun : null,
+				SMG = arenaPlayer.WeaponPreferences.TryGetValue(WeaponType.SMG, out CsItem? smg) ? smg : null,
+				LMG = arenaPlayer.WeaponPreferences.TryGetValue(WeaponType.LMG, out CsItem? lmg) ? lmg : null,
+				Pistol = arenaPlayer.WeaponPreferences.TryGetValue(WeaponType.Pistol, out CsItem? pistol) ? pistol : null,
+				Rounds = string.Join(",", arenaPlayer.RoundPreferences.Select(r => r.ID))
+			};
+
+			using SqliteConnection connection = await OpenConnectionAsync();
+
+			await _databaseWriteLock.WaitAsync();
+			try
+			{
+				await connection.ExecuteAsync(sqlUpdate, weaponParameters);
+			}
+			finally
+			{
+				_databaseWriteLock.Release();
+			}
+		}
+		catch (Exception ex)
+		{
+			// Logged only: this method always runs fire-and-forget via Task.Run(), so a rethrow here
+			// would just become an unobserved task exception instead of surfacing anywhere useful.
+			Logger.LogError("Failed to save player preferences: {0}", ex.Message);
+		}
+	}
+
 	public async Task PurgeDatabaseAsync()
 	{
 		if (Config.DatabaseSettings.TablePurgeDays <= 0)
 			return;
 
+		string tablePrefix = Config.DatabaseSettings.TablePrefix;
 		string query = $@"
-			DELETE FROM `{Config.DatabaseSettings.TablePrefix}k4-arenas`
-			WHERE `lastseen` < DATE_SUB(NOW(), INTERVAL @PurgeDays DAY);";
+			DELETE FROM ""{tablePrefix}k4-arenas""
+			WHERE datetime(""lastseen"") < datetime('now', '-' || @PurgeDays || ' days');";
 
-		using MySqlConnection connection = CreateConnection(Config);
-		await connection.OpenAsync();
-		await connection.ExecuteAsync(query, new { PurgeDays = Config.DatabaseSettings.TablePurgeDays });
-	}
+		using SqliteConnection connection = await OpenConnectionAsync();
 
-	public static bool IsDatabaseConfigDefault(PluginConfig config)
-	{
-		DatabaseSettings _settings = config.DatabaseSettings;
-		return _settings.Host == "localhost" &&
-			_settings.Username == "root" &&
-			_settings.Database == "database" &&
-			_settings.Password == "password";
+		await _databaseWriteLock.WaitAsync();
+		try
+		{
+			await connection.ExecuteAsync(query, new { PurgeDays = Config.DatabaseSettings.TablePurgeDays });
+		}
+		finally
+		{
+			_databaseWriteLock.Release();
+		}
 	}
 }

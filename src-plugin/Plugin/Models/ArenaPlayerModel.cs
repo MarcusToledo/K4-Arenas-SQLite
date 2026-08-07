@@ -4,13 +4,11 @@ using CounterStrikeSharp.API.Core.Translations;
 using CounterStrikeSharp.API.Modules.Entities.Constants;
 using CounterStrikeSharp.API.Modules.Menu;
 using CounterStrikeSharp.API.Modules.Utils;
-using Dapper;
 using K4ArenaSharedApi;
 using Menu;
 using Menu.Enums;
 using Microsoft.Extensions.Localization;
 using Microsoft.Extensions.Logging;
-using MySqlConnector;
 
 namespace K4Arenas.Models;
 
@@ -387,39 +385,6 @@ public class ArenaPlayer
 		Controller.PrintToChat($" {Localizer.ForPlayer(Controller, "k4.general.prefix")} {Localizer.ForPlayer(Controller, "k4.chat.weapon_preferences_added", Localizer.ForPlayer(Controller, item?.ToString() ?? "k4.general.random"))}");
 	}
 
-	public async Task SavePlayerPreferencesAsync()
-	{
-		if (!Loaded)
-			return;
-
-		using MySqlConnection connection = Plugin.CreateConnection(Config);
-		await connection.OpenAsync();
-
-		try
-		{
-			string sqlUpdate = $@"
-				UPDATE `{Config.DatabaseSettings.TablePrefix}k4-arenas`
-				SET `rifle` = @Rifle, `sniper` = @Sniper, `shotgun` = @Shotgun, `smg` = @SMG, `lmg` = @LMG, `pistol` = @Pistol, `rounds` = @Rounds
-				WHERE `steamid64` = @SteamId;";
-
-			var weaponParameters = new
-			{
-				SteamId = SteamID,
-				Rifle = WeaponPreferences.TryGetValue(WeaponType.Rifle, out CsItem? rifle) ? rifle : null,
-				Sniper = WeaponPreferences.TryGetValue(WeaponType.Sniper, out CsItem? sniper) ? sniper : null,
-				Shotgun = WeaponPreferences.TryGetValue(WeaponType.Shotgun, out CsItem? shotgun) ? shotgun : null,
-				SMG = WeaponPreferences.TryGetValue(WeaponType.SMG, out CsItem? smg) ? smg : null,
-				LMG = WeaponPreferences.TryGetValue(WeaponType.LMG, out CsItem? lmg) ? lmg : null,
-				Pistol = WeaponPreferences.TryGetValue(WeaponType.Pistol, out CsItem? pistol) ? pistol : null,
-				Rounds = string.Join(",", RoundPreferences.Select(r => r.ID))
-			};
-
-			await connection.ExecuteAsync(sqlUpdate, weaponParameters);
-		}
-		catch (Exception ex)
-		{
-			Plugin.Logger.LogError("Failed to save player preferences: {0}", ex.Message);
-			throw;
-		}
-	}
+	// Storage lives entirely in Plugin/PluginDatabase.cs; this model does not talk to SQLite directly.
+	public Task SavePlayerPreferencesAsync() => Plugin.SavePlayerPreferencesAsync(this);
 }

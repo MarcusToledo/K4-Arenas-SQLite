@@ -132,7 +132,7 @@ namespace K4Arenas
 		public AllowedWeaponPreferences AllowedWeaponPreferences { get; set; } = new AllowedWeaponPreferences();
 
 		[JsonPropertyName("ConfigVersion")]
-		public override int Version { get; set; } = 10;
+		public override int Version { get; set; } = 11;
 	}
 
 	public sealed class CompatibilitySettings
@@ -266,23 +266,8 @@ namespace K4Arenas
 
 	public sealed class DatabaseSettings
 	{
-		[JsonPropertyName("host")]
-		public string Host { get; set; } = "localhost";
-
-		[JsonPropertyName("username")]
-		public string Username { get; set; } = "root";
-
-		[JsonPropertyName("database")]
-		public string Database { get; set; } = "database";
-
-		[JsonPropertyName("password")]
-		public string Password { get; set; } = "password";
-
-		[JsonPropertyName("port")]
-		public int Port { get; set; } = 3306;
-
-		[JsonPropertyName("sslmode")]
-		public string Sslmode { get; set; } = "preferred";
+		[JsonPropertyName("database-file")]
+		public string DatabaseFile { get; set; } = "k4-arenas.sqlite";
 
 		[JsonPropertyName("table-prefix")]
 		public string TablePrefix { get; set; } = "";

@@ -20,6 +20,7 @@
         public Menu.KitsuneMenu Menu { get; private set; } = null!;
         public bool IsBetweenRounds = false;
         public bool HasDatabase = false;
+        public string DatabaseFilePath { get; private set; } = string.Empty;
 
         public void OnConfigParsed(PluginConfig config)
         {
@@ -62,16 +63,25 @@
             string fileNameWithoutExtension = Path.GetFileNameWithoutExtension(ModulePath);
             FlashFixFound = Directory.Exists(Path.Combine(ModulePath, "..", "FlashingXMLHintFix"));
 
-            if (!IsDatabaseConfigDefault(Config))
+            string databaseDirectory = Path.Combine(ModuleDirectory, "data");
+            Directory.CreateDirectory(databaseDirectory);
+            DatabaseFilePath = Path.Combine(databaseDirectory, Config.DatabaseSettings.DatabaseFile);
+
+            try
             {
+                Task.Run(CreateTableAsync).Wait();
+
                 HasDatabase = true;
 
-                Task.Run(CreateTableAsync).Wait();
                 Task.Run(PurgeDatabaseAsync);
+
+                base.Logger.LogInformation("SQLite preferences database initialized successfully at {0}.", DatabaseFilePath);
             }
-            else
+            catch (Exception ex)
             {
-                base.Logger.LogError("Please setup your MySQL database settings in the configuration file in order to use the preferences system.");
+                HasDatabase = false;
+
+                base.Logger.LogError("Failed to initialize SQLite preferences database: {0}", ex.Message);
             }
 
             Menu = new Menu.KitsuneMenu(this);
