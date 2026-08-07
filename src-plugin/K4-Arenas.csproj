@@ -25,11 +25,15 @@
       <IncludeAssets>compile; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
     </PackageReference>
     <PackageReference Include="Dapper" Version="*" />
+    <!--
+      Microsoft.Data.Sqlite pulls SQLitePCLRaw.bundle_e_sqlite3 2.1.11, whose bundled SQLite is
+      affected by GHSA-2m69-gcr7-jv3q (memory corruption in queries with more aggregate terms than
+      columns). We deliberately do NOT pin this up: every version with the fix (2.1.12+) ships a
+      linux-x64 libe_sqlite3.so linked against GLIBC_2.33+, which broke loading on the target server
+      (older glibc). This plugin only ever runs simple parameterized CRUD with no aggregates and no
+      externally-supplied SQL, so the advisory doesn't practically apply here — compatibility wins.
+    -->
     <PackageReference Include="Microsoft.Data.Sqlite" Version="*" />
-    <!-- Microsoft.Data.Sqlite still pulls SQLitePCLRaw.bundle_e_sqlite3 2.1.11, which bundles a SQLite
-         build affected by GHSA-2m69-gcr7-jv3q (memory corruption, fixed in SQLite 3.50.2+). Pin the
-         transitive dependency up to force the patched native library. -->
-    <PackageReference Include="SQLitePCLRaw.bundle_e_sqlite3" Version="2.1.12" />
     <ProjectReference Include="../src-shared/K4-ArenaSharedApi.csproj">
       <Private>false</Private>
     </ProjectReference>
