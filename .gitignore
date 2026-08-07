@@ -61,3 +61,6 @@ __MACOSX/
 bin/
 obj/
 *.sln
+
+# Local external binary references (see src-plugin/libs/README.md)
+src-plugin/libs/*.dll
